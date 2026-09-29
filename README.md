@@ -16,12 +16,12 @@ Pydantic limits the action vocabulary and incident ID. LangGraph illustrates typ
 
 ## Run and example
 
-From `portfolio`:
+From this repository after `python -m pip install -e ".[dev]"`:
 
 ```bash
-python -m 03_approval_workflow.cli --db approval.db propose --kind add_note --incident-id 7 --reason 'Customer confirmed recovery'
-python -m 03_approval_workflow.cli --db approval.db show JOB_ID
-python -m 03_approval_workflow.cli --db approval.db decide JOB_ID --approve --actor reviewer@example.test
+python -m approval_workflow.cli --db approval.db propose --kind add_note --incident-id 7 --reason 'Customer confirmed recovery'
+python -m approval_workflow.cli --db approval.db show JOB_ID
+python -m approval_workflow.cli --db approval.db decide JOB_ID --approve --actor reviewer@example.test
 ```
 
 Substitute the printed job ID. For a live model proposal, use `propose --request 'Add a recovery note to incident 7'` with `OPENAI_API_KEY` configured. Try a second decision on the same job; it is rejected.
@@ -33,3 +33,7 @@ This is an auditable command ledger, not an incident management integration: app
 ## Interview preparation
 
 Explain where model authority ends, why a second model review is useful but cannot authorize a write, why a Pydantic schema is necessary but insufficient for authorization, how single-use approval is enforced, how crash recovery works from durable business state, and how an outbox avoids losing approved actions.
+
+## Verify
+
+Run `python -m pytest -q` and `python -m ruff check .` from this repository.
