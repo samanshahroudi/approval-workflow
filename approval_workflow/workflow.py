@@ -56,6 +56,8 @@ class Workflow:
             db.execute("CREATE TABLE IF NOT EXISTS incident_actions (job_id TEXT PRIMARY KEY, incident_id INTEGER, kind TEXT, reason TEXT)")
 
     def propose(self, action: Action, actor: str = "planner", review: RiskReview | None = None) -> str:
+        if not actor.strip():
+            raise ValueError("proposer identity required")
         if review is not None and not review.safe_to_propose:
             raise ValueError(f"review rejected proposal: {review.rationale}")
         job_id = uuid.uuid4().hex
