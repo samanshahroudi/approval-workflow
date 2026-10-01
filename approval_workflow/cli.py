@@ -17,8 +17,9 @@ def main() -> None:
     decide = sub.add_parser("decide")
     decide.add_argument("job_id")
     decide.add_argument("--actor", required=True)
-    decide.add_argument("--approve", action="store_true")
-    decide.add_argument("--reject", action="store_true")
+    decision = decide.add_mutually_exclusive_group(required=True)
+    decision.add_argument("--approve", action="store_true")
+    decision.add_argument("--reject", action="store_true")
     show = sub.add_parser("show")
     show.add_argument("job_id")
     args = parser.parse_args()
@@ -29,8 +30,6 @@ def main() -> None:
         review = review_live(action) if args.request else None
         print(workflow.propose(action, review=review))
     elif args.command == "decide":
-        if args.approve == args.reject:
-            parser.error("choose exactly one of --approve or --reject")
         print(workflow.decide(args.job_id, args.approve, args.actor))
     else:
         print(json.dumps(workflow.get(args.job_id), indent=2))
