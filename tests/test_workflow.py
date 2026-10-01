@@ -29,3 +29,19 @@ def test_action_requires_nonblank_reason(reason):
 def test_action_preserves_meaningful_reason():
     action = Action(kind="add_note", incident_id=1, reason="  Customer confirmed recovery  ")
     assert action.reason == "  Customer confirmed recovery  "
+
+
+def test_rejected_risk_review_leaves_no_durable_proposal(tmp_path):
+    import sqlite3
+
+    from approval_workflow.workflow import RiskReview
+
+    service = Workflow(str(tmp_path / "approval.db"))
+    action = Action(kind="close_incident", incident_id=1, reason="Close before recovery confirmed")
+    review = RiskReview(safe_to_propose=False, rationale="Recovery has not been confirmed")
+    with pytest.raises(ValueError, match="review rejected proposal"):
+        service.propose(action, review=review)
+    # A rejected model review must not create a job a human could later approve.
+    with sqlite3.connect(service.path) as db:
+        for table in ("jobs", "audit", "incident_actions"):
+            assert db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0
