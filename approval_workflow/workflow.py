@@ -8,13 +8,20 @@ from pathlib import Path
 from typing import Literal, TypedDict
 
 from langgraph.graph import END, START, StateGraph
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class Action(BaseModel):
     kind: Literal["add_note", "close_incident"]
     incident_id: int = Field(gt=0)
     reason: str = Field(min_length=5, max_length=500)
+
+    @field_validator("reason")
+    @classmethod
+    def require_reason(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("action reason cannot be blank")
+        return value
 
 
 class RiskReview(BaseModel):

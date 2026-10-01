@@ -18,3 +18,14 @@ def test_proposal_requires_actor(tmp_path):
     action = Action(kind="add_note", incident_id=1, reason="Customer confirmed recovery")
     with pytest.raises(ValueError, match="proposer identity"):
         service.propose(action, actor="   ")
+
+
+@pytest.mark.parametrize("reason", ["     ", " \t\n  "])
+def test_action_requires_nonblank_reason(reason):
+    with pytest.raises(ValueError, match="reason cannot be blank"):
+        Action(kind="add_note", incident_id=1, reason=reason)
+
+
+def test_action_preserves_meaningful_reason():
+    action = Action(kind="add_note", incident_id=1, reason="  Customer confirmed recovery  ")
+    assert action.reason == "  Customer confirmed recovery  "
