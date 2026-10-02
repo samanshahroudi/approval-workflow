@@ -23,6 +23,15 @@ def main() -> None:
     show = sub.add_parser("show")
     show.add_argument("job_id")
     args = parser.parse_args()
+    if args.command == "propose":
+        manual = (args.kind, args.incident_id, args.reason)
+        if args.request is not None:
+            if not args.request.strip():
+                parser.error("--request cannot be blank")
+            if any(value is not None for value in manual):
+                parser.error("--request cannot be combined with --kind, --incident-id, or --reason")
+        elif any(value is None for value in manual):
+            parser.error("propose requires --request or all of --kind, --incident-id, and --reason")
     workflow = Workflow(args.db)
     if args.command == "propose":
         action = plan_live(args.request) if args.request else Action(
