@@ -80,3 +80,18 @@ def test_failed_decision_audit_rolls_back_and_can_be_retried(tmp_path):
             (job, action.incident_id, action.kind, action.reason)]
         assert db.execute("SELECT event,actor FROM audit").fetchall() == [
             ("proposed", "planner"), ("completed", "reviewer")]
+
+
+@pytest.mark.parametrize("decision", ["false", "true", 0, 1, None, [], {}])
+def test_decision_requires_boolean_without_changing_job(tmp_path, decision):
+    service = Workflow(str(tmp_path / "approval.db"))
+    job = service.propose(Action(kind="add_note", incident_id=7, reason="Recovery confirmed"))
+    before = service.get(job)
+    with pytest.raises(TypeError, match="decision must be a boolean"):
+        service.decide(job, decision, "reviewer")
+    assert service.get(job) == before
+    with sqlite3.connect(service.path) as db:
+        assert db.execute("SELECT COUNT(*) FROM incident_actions").fetchone()[0] == 0
+        assert db.execute("SELECT event FROM audit").fetchall() == [("proposed",)]
+    service.decide(job, False, "reviewer")
+    assert service.get(job)["status"] == "rejected"

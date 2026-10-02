@@ -10,6 +10,8 @@ An agent that proposes operational actions should not silently perform them. Thi
 
 The deterministic CLI path can propose an action without a model. The `--request` path uses one model call to produce an `Action` and a second, separately prompted call to critique it as a typed `RiskReview`. A failed review prevents a pending job; a passed review still needs a human decision. `decide` takes an approver identity and either rejects or records the authorized action. A SQLite write lock makes the decision single-use. The graph is intentionally small so the control boundary is visible. Business state is stored in SQLite; LangGraph's in-memory invocation is reconstructed from that state, rather than pretending a process-local checkpoint is durable.
 
+`Workflow.decide` requires a boolean decision; strings such as `"false"`, integers, and other values are rejected before changing the job or audit log.
+
 ## Concepts and choices
 
 Pydantic limits the action vocabulary and incident ID. LangGraph illustrates typed state, conditional routing, and a bounded terminal path. SQLite holds jobs, audit events, and approved action records. The code is in `workflow.py` and the interface in `cli.py`.

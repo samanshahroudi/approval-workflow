@@ -84,6 +84,8 @@ class Workflow:
         return job_id
 
     def decide(self, job_id: str, approve: bool, actor: str) -> str:
+        if not isinstance(approve, bool):
+            raise TypeError("decision must be a boolean")
         if not actor.strip():
             raise ValueError("approver identity required")
         with sqlite3.connect(self.path, timeout=10) as db:
