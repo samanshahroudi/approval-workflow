@@ -1,4 +1,6 @@
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 
 import pytest
 
@@ -25,6 +27,33 @@ def test_approval_is_single_use(tmp_path):
     assert service.get(job)["status"] == "completed"
     with pytest.raises(ValueError):
         service.decide(job, True, "reviewer@example.test")
+
+
+def test_concurrent_decisions_execute_and_audit_once(tmp_path):
+    service = Workflow(str(tmp_path / "approval.db"))
+    action = Action(kind="add_note", incident_id=7, reason="Recovery confirmed")
+    job = service.propose(action)
+    ready = Barrier(2)
+
+    def decide(actor):
+        ready.wait(timeout=5)
+        try:
+            service.decide(job, True, actor)
+            return actor
+        except ValueError as exc:
+            assert str(exc) == "job already decided"
+            return None
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(decide, actor) for actor in ("reviewer-one", "reviewer-two")]
+        winners = [actor for future in futures if (actor := future.result(timeout=15)) is not None]
+    assert len(winners) == 1
+    assert service.get(job)["status"] == "completed"
+    with sqlite3.connect(service.path) as db:
+        assert db.execute("SELECT job_id,incident_id,kind,reason FROM incident_actions").fetchall() == [
+            (job, action.incident_id, action.kind, action.reason)]
+        assert db.execute("SELECT event,actor FROM audit ORDER BY rowid").fetchall() == [
+            ("proposed", "planner"), ("completed", winners[0])]
 
 
 def test_proposal_requires_actor(tmp_path):
