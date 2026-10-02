@@ -28,6 +28,13 @@ class RiskReview(BaseModel):
     safe_to_propose: bool
     rationale: str = Field(min_length=5, max_length=300)
 
+    @field_validator("rationale")
+    @classmethod
+    def require_rationale(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("review rationale cannot be blank")
+        return value
+
 
 class FlowState(TypedDict):
     action: dict

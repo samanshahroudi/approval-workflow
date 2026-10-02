@@ -2,7 +2,19 @@ import sqlite3
 
 import pytest
 
-from approval_workflow.workflow import Action, Workflow
+from approval_workflow.workflow import Action, RiskReview, Workflow
+
+
+@pytest.mark.parametrize("safe_to_propose", [False, True])
+@pytest.mark.parametrize("rationale", [" " * 5, " \t\n  "])
+def test_risk_review_requires_nonblank_rationale(safe_to_propose, rationale):
+    with pytest.raises(ValueError, match="rationale cannot be blank"):
+        RiskReview(safe_to_propose=safe_to_propose, rationale=rationale)
+
+
+def test_risk_review_preserves_meaningful_rationale():
+    review = RiskReview(safe_to_propose=True, rationale="  Recovery confirmed  ")
+    assert review.rationale == "  Recovery confirmed  "
 
 
 def test_approval_is_single_use(tmp_path):
@@ -34,8 +46,6 @@ def test_action_preserves_meaningful_reason():
 
 
 def test_rejected_risk_review_leaves_no_durable_proposal(tmp_path):
-    from approval_workflow.workflow import RiskReview
-
     service = Workflow(str(tmp_path / "approval.db"))
     action = Action(kind="close_incident", incident_id=1, reason="Close before recovery confirmed")
     review = RiskReview(safe_to_propose=False, rationale="Recovery has not been confirmed")
