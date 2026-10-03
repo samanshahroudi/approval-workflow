@@ -3,6 +3,24 @@ import pytest
 from approval_workflow.cli import main
 
 
+@pytest.mark.parametrize("incident_id,reason", [("0", "Recovery confirmed"),
+                                               ("-1", "Recovery confirmed"),
+                                               ("7", "bad"), ("7", "     "),
+                                               ("7", "x" * 501)])
+def test_invalid_manual_action_does_not_create_database(
+    tmp_path, monkeypatch, capsys, incident_id, reason
+):
+    path = tmp_path / "approval.db"
+    monkeypatch.setattr("sys.argv", ["approval", "--db", str(path), "propose",
+                                    "--kind", "add_note", "--incident-id", incident_id,
+                                    "--reason", reason])
+    with pytest.raises(SystemExit) as exc:
+        main()
+    assert exc.value.code == 2
+    assert "error:" in capsys.readouterr().err
+    assert not path.exists()
+
+
 @pytest.mark.parametrize("flags", [[], ["--approve", "--reject"]])
 def test_invalid_decision_flags_do_not_create_database(tmp_path, monkeypatch, capsys, flags):
     path = tmp_path / "approval.db"

@@ -2,6 +2,8 @@ import argparse
 import json
 import os
 
+from pydantic import ValidationError
+
 from .workflow import Action, Workflow, plan_live, review_live
 
 
@@ -23,6 +25,7 @@ def main() -> None:
     show = sub.add_parser("show")
     show.add_argument("job_id")
     args = parser.parse_args()
+    action = None
     if args.command == "propose":
         manual = (args.kind, args.incident_id, args.reason)
         if args.request is not None:
@@ -32,12 +35,16 @@ def main() -> None:
                 parser.error("--request cannot be combined with --kind, --incident-id, or --reason")
         elif any(value is None for value in manual):
             parser.error("propose requires --request or all of --kind, --incident-id, and --reason")
+        else:
+            try:
+                action = Action(kind=args.kind, incident_id=args.incident_id, reason=args.reason)
+            except ValidationError as exc:
+                parser.error(str(exc))
     if args.command == "decide" and not args.actor.strip():
         parser.error("--actor cannot be blank")
     workflow = Workflow(args.db)
     if args.command == "propose":
-        action = plan_live(args.request) if args.request else Action(
-            kind=args.kind, incident_id=args.incident_id, reason=args.reason)
+        action = plan_live(args.request) if args.request else action
         review = review_live(action) if args.request else None
         print(workflow.propose(action, review=review))
     elif args.command == "decide":
