@@ -112,3 +112,37 @@ def test_blank_decision_actor_does_not_create_database(tmp_path, monkeypatch, ca
     assert exc.value.code == 2
     assert "--actor cannot be blank" in capsys.readouterr().err
     assert not path.exists()
+
+
+@pytest.mark.parametrize("command", ["show", "decide"])
+def test_missing_job_is_usage_error(tmp_path, monkeypatch, capsys, command):
+    flags = ["--approve", "--actor", "reviewer"] if command == "decide" else []
+    monkeypatch.setattr("sys.argv", ["approval", "--db", str(tmp_path / "approval.db"),
+                                    command, "missing-job", *flags])
+    with pytest.raises(SystemExit) as exc:
+        main()
+    assert exc.value.code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "job not found: missing-job" in captured.err
+    assert "Traceback" not in captured.err
+
+
+def test_repeated_cli_decision_is_usage_error_without_changing_job(tmp_path, monkeypatch, capsys):
+    from approval_workflow.workflow import Action, Workflow
+
+    path = tmp_path / "approval.db"
+    workflow = Workflow(str(path))
+    job = workflow.propose(Action(kind="add_note", incident_id=7, reason="Recovery confirmed"))
+    workflow.decide(job, False, "reviewer")
+    before = workflow.get(job)
+    monkeypatch.setattr("sys.argv", ["approval", "--db", str(path), "decide", job,
+                                    "--approve", "--actor", "reviewer"])
+    with pytest.raises(SystemExit) as exc:
+        main()
+    assert exc.value.code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "job already decided" in captured.err
+    assert "Traceback" not in captured.err
+    assert workflow.get(job) == before

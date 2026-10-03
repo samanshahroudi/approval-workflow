@@ -47,10 +47,16 @@ def main() -> None:
         action = plan_live(args.request) if args.request else action
         review = review_live(action) if args.request else None
         print(workflow.propose(action, review=review))
-    elif args.command == "decide":
-        print(workflow.decide(args.job_id, args.approve, args.actor))
     else:
-        print(json.dumps(workflow.get(args.job_id), indent=2))
+        try:
+            if args.command == "decide":
+                print(workflow.decide(args.job_id, args.approve, args.actor))
+            else:
+                print(json.dumps(workflow.get(args.job_id), indent=2))
+        except KeyError:
+            parser.error(f"job not found: {args.job_id}")
+        except ValueError as exc:
+            parser.error(str(exc))
 
 
 if __name__ == "__main__":
