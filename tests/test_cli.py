@@ -81,3 +81,16 @@ def test_invalid_proposal_arguments_have_no_side_effects(tmp_path, monkeypatch, 
     assert exc.value.code == 2
     assert "error:" in capsys.readouterr().err
     assert not path.exists()
+
+
+@pytest.mark.parametrize("actor", ["", "   ", "\t\n"])
+@pytest.mark.parametrize("flag", ["--approve", "--reject"])
+def test_blank_decision_actor_does_not_create_database(tmp_path, monkeypatch, capsys, actor, flag):
+    path = tmp_path / "approval.db"
+    monkeypatch.setattr("sys.argv", ["approval", "--db", str(path), "decide", "job-id",
+                                    "--actor", actor, flag])
+    with pytest.raises(SystemExit) as exc:
+        main()
+    assert exc.value.code == 2
+    assert "--actor cannot be blank" in capsys.readouterr().err
+    assert not path.exists()

@@ -32,6 +32,8 @@ def main() -> None:
                 parser.error("--request cannot be combined with --kind, --incident-id, or --reason")
         elif any(value is None for value in manual):
             parser.error("propose requires --request or all of --kind, --incident-id, and --reason")
+    if args.command == "decide" and not args.actor.strip():
+        parser.error("--actor cannot be blank")
     workflow = Workflow(args.db)
     if args.command == "propose":
         action = plan_live(args.request) if args.request else Action(
