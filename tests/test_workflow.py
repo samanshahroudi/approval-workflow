@@ -124,3 +124,30 @@ def test_decision_requires_boolean_without_changing_job(tmp_path, decision):
         assert db.execute("SELECT event FROM audit").fetchall() == [("proposed",)]
     service.decide(job, False, "reviewer")
     assert service.get(job)["status"] == "rejected"
+
+
+@pytest.mark.parametrize("field,value", [("incident_id", 0), ("kind", "delete_incident"),
+                                       ("reason", "     ")])
+def test_invalid_copied_action_cannot_create_proposal(tmp_path, field, value):
+    service = Workflow(str(tmp_path / "approval.db"))
+    action = Action(kind="add_note", incident_id=7, reason="Recovery confirmed")
+    with pytest.raises(ValueError):
+        service.propose(action.model_copy(update={field: value}))
+    with sqlite3.connect(service.path) as db:
+        assert db.execute("SELECT COUNT(*) FROM jobs").fetchone()[0] == 0
+        assert db.execute("SELECT COUNT(*) FROM audit").fetchone()[0] == 0
+    job = service.propose(action)
+    service.decide(job, True, "reviewer")
+    assert service.get(job)["status"] == "completed"
+
+
+def test_invalid_copied_review_cannot_create_proposal(tmp_path):
+    service = Workflow(str(tmp_path / "approval.db"))
+    action = Action(kind="add_note", incident_id=7, reason="Recovery confirmed")
+    review = RiskReview(safe_to_propose=True, rationale="Recovery has been confirmed")
+    with pytest.raises(ValueError, match="rationale cannot be blank"):
+        service.propose(action, review=review.model_copy(update={"rationale": "     "}))
+    with sqlite3.connect(service.path) as db:
+        assert db.execute("SELECT COUNT(*) FROM jobs").fetchone()[0] == 0
+        assert db.execute("SELECT COUNT(*) FROM audit").fetchone()[0] == 0
+    assert service.get(service.propose(action, review=review))["status"] == "pending"

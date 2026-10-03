@@ -72,6 +72,9 @@ class Workflow:
     def propose(self, action: Action, actor: str = "planner", review: RiskReview | None = None) -> str:
         if not actor.strip():
             raise ValueError("proposer identity required")
+        action = Action.model_validate(action.model_dump())
+        if review is not None:
+            review = RiskReview.model_validate(review.model_dump())
         if review is not None and not review.safe_to_propose:
             raise ValueError(f"review rejected proposal: {review.rationale}")
         job_id = uuid.uuid4().hex
