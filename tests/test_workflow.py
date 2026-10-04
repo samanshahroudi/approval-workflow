@@ -151,3 +151,31 @@ def test_invalid_copied_review_cannot_create_proposal(tmp_path):
         assert db.execute("SELECT COUNT(*) FROM jobs").fetchone()[0] == 0
         assert db.execute("SELECT COUNT(*) FROM audit").fetchone()[0] == 0
     assert service.get(service.propose(action, review=review))["status"] == "pending"
+
+
+def test_connections_close_after_proposal_reads_and_decisions(tmp_path, monkeypatch):
+    connections = []
+    connect = sqlite3.connect
+
+    def track_connection(*args, **kwargs):
+        connection = connect(*args, **kwargs)
+        connections.append(connection)
+        return connection
+
+    monkeypatch.setattr(sqlite3, "connect", track_connection)
+    workflow = Workflow(str(tmp_path / "approval.db"))
+    action = Action(kind="add_note", incident_id=7, reason="Recovery confirmed")
+    job = workflow.propose(action)
+    assert workflow.get(job)["status"] == "pending"
+    workflow.decide(job, True, "reviewer")
+    assert workflow.get(job)["status"] == "completed"
+    with pytest.raises(ValueError, match="already decided"):
+        workflow.decide(job, True, "reviewer")
+    rejected = workflow.propose(action)
+    workflow.decide(rejected, False, "reviewer")
+    with pytest.raises(KeyError):
+        workflow.get("missing")
+    assert connections
+    for connection in connections:
+        with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
+            connection.execute("SELECT 1")

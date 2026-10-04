@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import uuid
+from contextlib import closing
 from pathlib import Path
 from typing import Literal, TypedDict
 
@@ -64,7 +65,7 @@ class Workflow:
     def __init__(self, path: str):
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.path = path
-        with sqlite3.connect(path) as db:
+        with closing(sqlite3.connect(path)) as db, db:
             db.execute("CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, action TEXT NOT NULL, status TEXT NOT NULL, result TEXT NOT NULL DEFAULT '')")
             db.execute("CREATE TABLE IF NOT EXISTS audit (job_id TEXT, event TEXT, actor TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
             db.execute("CREATE TABLE IF NOT EXISTS incident_actions (job_id TEXT PRIMARY KEY, incident_id INTEGER, kind TEXT, reason TEXT)")
@@ -78,7 +79,7 @@ class Workflow:
         if review is not None and not review.safe_to_propose:
             raise ValueError(f"review rejected proposal: {review.rationale}")
         job_id = uuid.uuid4().hex
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db, db:
             db.execute("INSERT INTO jobs(id,action,status) VALUES (?,?,?)", (job_id, action.model_dump_json(), "pending"))
             db.execute("INSERT INTO audit(job_id,event,actor) VALUES (?,?,?)", (job_id, "proposed", actor))
             if review is not None:
@@ -91,7 +92,7 @@ class Workflow:
             raise TypeError("decision must be a boolean")
         if not actor.strip():
             raise ValueError("approver identity required")
-        with sqlite3.connect(self.path, timeout=10) as db:
+        with closing(sqlite3.connect(self.path, timeout=10)) as db, db:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute("SELECT action,status,result FROM jobs WHERE id=?", (job_id,)).fetchone()
             if row is None:
@@ -111,7 +112,7 @@ class Workflow:
             return result
 
     def get(self, job_id: str) -> dict:
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db, db:
             row = db.execute("SELECT action,status,result FROM jobs WHERE id=?", (job_id,)).fetchone()
         if row is None:
             raise KeyError(job_id)
