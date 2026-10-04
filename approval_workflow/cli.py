@@ -44,9 +44,12 @@ def main() -> None:
         parser.error("--actor cannot be blank")
     workflow = Workflow(args.db)
     if args.command == "propose":
-        action = plan_live(args.request) if args.request else action
-        review = review_live(action) if args.request else None
-        print(workflow.propose(action, review=review))
+        try:
+            action = plan_live(args.request) if args.request else action
+            review = review_live(action) if args.request else None
+            print(workflow.propose(action, review=review))
+        except ValueError as exc:
+            parser.error(str(exc))
     else:
         try:
             if args.command == "decide":

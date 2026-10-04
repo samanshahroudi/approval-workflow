@@ -146,3 +146,27 @@ def test_repeated_cli_decision_is_usage_error_without_changing_job(tmp_path, mon
     assert "job already decided" in captured.err
     assert "Traceback" not in captured.err
     assert workflow.get(job) == before
+
+
+def test_rejected_model_review_is_usage_error_without_pending_job(tmp_path, monkeypatch, capsys):
+    import sqlite3
+
+    from approval_workflow.workflow import Action, RiskReview
+
+    monkeypatch.setattr("approval_workflow.cli.plan_live", lambda request:
+                        Action(kind="close_incident", incident_id=7, reason="Close the incident"))
+    monkeypatch.setattr("approval_workflow.cli.review_live", lambda action:
+                        RiskReview(safe_to_propose=False, rationale="Recovery is unconfirmed"))
+    path = tmp_path / "approval.db"
+    monkeypatch.setattr("sys.argv", ["approval", "--db", str(path), "propose",
+                                    "--request", "Close incident 7"])
+    with pytest.raises(SystemExit) as exc:
+        main()
+    assert exc.value.code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "review rejected proposal: Recovery is unconfirmed" in captured.err
+    assert "Traceback" not in captured.err
+    with sqlite3.connect(path) as db:
+        for table in ("jobs", "audit", "incident_actions"):
+            assert db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0
