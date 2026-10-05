@@ -7,6 +7,21 @@ import pytest
 from approval_workflow.workflow import Action, RiskReview, Workflow
 
 
+@pytest.mark.parametrize("flag", ["true", "false", "yes", 0, 1])
+@pytest.mark.filterwarnings("ignore:Pydantic serializer warnings:UserWarning")
+def test_risk_review_rejects_coerced_flags_without_creating_proposal(tmp_path, flag):
+    service = Workflow(str(tmp_path / "approval.db"))
+    action = Action(kind="add_note", incident_id=7, reason="Recovery confirmed")
+    with pytest.raises(ValueError):
+        RiskReview(safe_to_propose=flag, rationale="Recovery confirmed")
+    review = RiskReview(safe_to_propose=True, rationale="Recovery confirmed")
+    with pytest.raises(ValueError):
+        service.propose(action, review=review.model_copy(update={"safe_to_propose": flag}))
+    with sqlite3.connect(service.path) as db:
+        assert db.execute("SELECT COUNT(*) FROM jobs").fetchone()[0] == 0
+        assert db.execute("SELECT COUNT(*) FROM audit").fetchone()[0] == 0
+
+
 @pytest.mark.parametrize("safe_to_propose", [False, True])
 @pytest.mark.parametrize("rationale", [" " * 5, " \t\n  "])
 def test_risk_review_requires_nonblank_rationale(safe_to_propose, rationale):

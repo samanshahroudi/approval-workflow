@@ -26,7 +26,7 @@ class Action(BaseModel):
 
 
 class RiskReview(BaseModel):
-    safe_to_propose: bool
+    safe_to_propose: bool = Field(strict=True)
     rationale: str = Field(min_length=5, max_length=300)
 
     @field_validator("rationale")
