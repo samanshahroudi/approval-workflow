@@ -194,3 +194,18 @@ def test_connections_close_after_proposal_reads_and_decisions(tmp_path, monkeypa
     for connection in connections:
         with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
             connection.execute("SELECT 1")
+
+
+@pytest.mark.parametrize("incident_id", [True, False, "7", 7.0, 7.5])
+@pytest.mark.filterwarnings("ignore:Pydantic serializer warnings:UserWarning")
+def test_incident_ids_cannot_be_coerced_into_proposals(tmp_path, incident_id):
+    service = Workflow(str(tmp_path / "approval.db"))
+    with pytest.raises(ValueError):
+        Action(kind="add_note", incident_id=incident_id, reason="Recovery confirmed")
+    action = Action(kind="add_note", incident_id=7, reason="Recovery confirmed")
+    with pytest.raises(ValueError):
+        service.propose(action.model_copy(update={"incident_id": incident_id}))
+    with sqlite3.connect(service.path) as db:
+        assert db.execute("SELECT COUNT(*) FROM jobs").fetchone()[0] == 0
+        assert db.execute("SELECT COUNT(*) FROM audit").fetchone()[0] == 0
+    assert service.get(service.propose(action))["action"]["incident_id"] == 7

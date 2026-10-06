@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field, field_validator
 
 class Action(BaseModel):
     kind: Literal["add_note", "close_incident"]
-    incident_id: int = Field(gt=0)
+    incident_id: int = Field(gt=0, strict=True)
     reason: str = Field(min_length=5, max_length=500)
 
     @field_validator("reason")
