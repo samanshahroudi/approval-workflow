@@ -16,6 +16,7 @@ def main() -> None:
     propose.add_argument("--kind", choices=["add_note", "close_incident"])
     propose.add_argument("--incident-id", type=int)
     propose.add_argument("--reason")
+    propose.add_argument("--actor", default="planner", help="Proposer identity recorded in the audit log")
     decide = sub.add_parser("decide")
     decide.add_argument("job_id")
     decide.add_argument("--actor", required=True)
@@ -40,14 +41,14 @@ def main() -> None:
                 action = Action(kind=args.kind, incident_id=args.incident_id, reason=args.reason)
             except ValidationError as exc:
                 parser.error(str(exc))
-    if args.command == "decide" and not args.actor.strip():
+    if args.command in ("propose", "decide") and not args.actor.strip():
         parser.error("--actor cannot be blank")
     workflow = Workflow(args.db)
     if args.command == "propose":
         try:
             action = plan_live(args.request) if args.request else action
             review = review_live(action) if args.request else None
-            print(workflow.propose(action, review=review))
+            print(workflow.propose(action, actor=args.actor, review=review))
         except ValueError as exc:
             parser.error(str(exc))
     else:
