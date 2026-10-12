@@ -5,6 +5,7 @@ from approval_workflow.cli import main
 
 @pytest.mark.parametrize("incident_id,reason", [("0", "Recovery confirmed"),
                                                ("-1", "Recovery confirmed"),
+                                               (str(2**63), "Recovery confirmed"),
                                                ("7", "bad"), ("7", "     "),
                                                ("7", "x" * 501)])
 def test_invalid_manual_action_does_not_create_database(

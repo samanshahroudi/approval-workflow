@@ -19,6 +19,8 @@ Risk-review decisions require an actual boolean; strings and numbers are rejecte
 
 Pydantic limits the action vocabulary and incident ID. LangGraph illustrates typed state, conditional routing, and a bounded terminal path. SQLite holds jobs, audit events, and approved action records. The code is in `workflow.py` and the interface in `cli.py`.
 
+Incident IDs must be positive integers no greater than `2**63 - 1`, matching SQLite's integer range. Oversized IDs are rejected before persisting a proposal, so they cannot fail later during approval.
+
 ## Run and example
 
 From this repository after `python -m pip install -e ".[dev]"`:

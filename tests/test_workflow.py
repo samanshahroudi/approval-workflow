@@ -169,6 +169,7 @@ def test_decision_requires_boolean_without_changing_job(tmp_path, decision):
 
 
 @pytest.mark.parametrize("field,value", [("incident_id", 0), ("kind", "delete_incident"),
+                                       ("incident_id", 2**63),
                                        ("reason", "     ")])
 def test_invalid_copied_action_cannot_create_proposal(tmp_path, field, value):
     service = Workflow(str(tmp_path / "approval.db"))
@@ -236,3 +237,13 @@ def test_incident_ids_cannot_be_coerced_into_proposals(tmp_path, incident_id):
         assert db.execute("SELECT COUNT(*) FROM jobs").fetchone()[0] == 0
         assert db.execute("SELECT COUNT(*) FROM audit").fetchone()[0] == 0
     assert service.get(service.propose(action))["action"]["incident_id"] == 7
+
+
+def test_maximum_sqlite_incident_id_can_be_approved(tmp_path):
+    service = Workflow(str(tmp_path / "approval.db"))
+    action = Action(kind="add_note", incident_id=2**63 - 1, reason="Recovery confirmed")
+    job = service.propose(action)
+    service.decide(job, True, "reviewer")
+    assert service.get(job)["status"] == "completed"
+    with sqlite3.connect(service.path) as db:
+        assert db.execute("SELECT incident_id FROM incident_actions").fetchone() == (2**63 - 1,)
