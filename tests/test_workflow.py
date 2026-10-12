@@ -44,6 +44,33 @@ def test_approval_is_single_use(tmp_path):
         service.decide(job, True, "reviewer@example.test")
 
 
+@pytest.mark.parametrize("approve,status", [(True, "completed"), (False, "rejected")])
+def test_pending_and_decided_jobs_survive_restart(tmp_path, approve, status):
+    path = str(tmp_path / "approval.db")
+    action = Action(kind="add_note", incident_id=7, reason="Recovery confirmed")
+    job = Workflow(path).propose(action, actor="planner@example.test")
+    restarted = Workflow(path)
+    assert restarted.get(job) == {
+        "id": job, "action": action.model_dump(), "status": "pending", "result": "",
+    }
+    result = restarted.decide(job, approve, "reviewer@example.test")
+    decided = Workflow(path)
+    assert decided.get(job) == {
+        "id": job, "action": action.model_dump(), "status": status, "result": result,
+    }
+    # Both repeating and reversing a durable decision must remain single-use.
+    for next_decision in (approve, not approve):
+        with pytest.raises(ValueError, match="job already decided"):
+            decided.decide(job, next_decision, "another-reviewer")
+    with sqlite3.connect(path) as db:
+        assert db.execute("SELECT event,actor FROM audit ORDER BY rowid").fetchall() == [
+            ("proposed", "planner@example.test"), (status, "reviewer@example.test"),
+        ]
+        assert db.execute("SELECT job_id,incident_id,kind,reason FROM incident_actions").fetchall() == (
+            [(job, action.incident_id, action.kind, action.reason)] if approve else []
+        )
+
+
 def test_concurrent_decisions_execute_and_audit_once(tmp_path):
     service = Workflow(str(tmp_path / "approval.db"))
     action = Action(kind="add_note", incident_id=7, reason="Recovery confirmed")
