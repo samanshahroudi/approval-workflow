@@ -7,6 +7,30 @@ import pytest
 from approval_workflow.workflow import Action, RiskReview, Workflow
 
 
+@pytest.mark.parametrize("failed_event", ["proposed", "reviewed: Recovery confirmed"])
+def test_failed_proposal_audit_rolls_back_job_and_can_be_retried(tmp_path, failed_event):
+    service = Workflow(str(tmp_path / "approval.db"))
+    action = Action(kind="add_note", incident_id=7, reason="Recovery confirmed")
+    review = RiskReview(safe_to_propose=True, rationale="Recovery confirmed")
+    with sqlite3.connect(service.path) as db:
+        db.execute("CREATE TRIGGER fail_proposal_audit BEFORE INSERT ON audit "
+                   f"WHEN NEW.event='{failed_event}' "
+                   "BEGIN SELECT RAISE(ABORT, 'audit unavailable'); END")
+    with pytest.raises(sqlite3.IntegrityError, match="audit unavailable"):
+        service.propose(action, actor="planner@example.test", review=review)
+    with sqlite3.connect(service.path) as db:
+        assert db.execute("SELECT COUNT(*) FROM jobs").fetchone()[0] == 0
+        assert db.execute("SELECT COUNT(*) FROM audit").fetchone()[0] == 0
+        db.execute("DROP TRIGGER fail_proposal_audit")
+    job = service.propose(action, actor="planner@example.test", review=review)
+    assert service.get(job)["status"] == "pending"
+    with sqlite3.connect(service.path) as db:
+        assert db.execute("SELECT job_id,event,actor FROM audit ORDER BY rowid").fetchall() == [
+            (job, "proposed", "planner@example.test"),
+            (job, "reviewed: Recovery confirmed", "risk_reviewer"),
+        ]
+
+
 @pytest.mark.parametrize("flag", ["true", "false", "yes", 0, 1])
 @pytest.mark.filterwarnings("ignore:Pydantic serializer warnings:UserWarning")
 def test_risk_review_rejects_coerced_flags_without_creating_proposal(tmp_path, flag):
