@@ -37,6 +37,7 @@ Use either a nonblank `--request` or all three manual fields (`--kind`, `--incid
 
 Database initialization failures produce CLI usage errors with the database path and exit status 2, before any model calls.
 Database failures while proposing, deciding, or showing a job also produce usage errors with the database path and exit status 2. Failed proposal or decision writes roll back without printing a success result.
+Model provider failures during planning or review exit with status 2 and a concise error, without exposing the provider response or creating a pending job.
 
 ## Trade-offs, limitations, and next production steps
 

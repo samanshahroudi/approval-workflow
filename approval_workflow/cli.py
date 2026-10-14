@@ -3,6 +3,7 @@ import json
 import os
 import sqlite3
 
+from openai import OpenAIError
 from pydantic import ValidationError
 
 from .workflow import Action, Workflow, plan_live, review_live
@@ -52,6 +53,8 @@ def main() -> None:
             action = plan_live(args.request) if args.request else action
             review = review_live(action) if args.request else None
             print(workflow.propose(action, review=review))
+        except OpenAIError:
+            parser.error("model provider request failed; check credentials and provider availability")
         except sqlite3.DatabaseError as exc:
             parser.error(f"database operation failed for {args.db}: {exc}")
         except ValueError as exc:

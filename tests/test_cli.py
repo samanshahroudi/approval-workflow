@@ -5,6 +5,40 @@ import pytest
 from approval_workflow.cli import main
 
 
+@pytest.mark.parametrize("stage", ["plan_live", "review_live"])
+def test_provider_errors_exit_without_proposal_or_provider_details(
+    tmp_path, monkeypatch, capsys, stage,
+):
+    import httpx
+    from openai import AuthenticationError
+
+    from approval_workflow.workflow import Action
+
+    monkeypatch.setattr("approval_workflow.cli.plan_live", lambda request:
+                        Action(kind="add_note", incident_id=7, reason="Recovery confirmed"))
+    error = AuthenticationError("private provider response", response=httpx.Response(
+        401, request=httpx.Request("POST", "https://provider.example.test/responses")), body=None)
+
+    def fail(*args):
+        raise error
+
+    monkeypatch.setattr(f"approval_workflow.cli.{stage}", fail)
+    path = tmp_path / "approval.db"
+    monkeypatch.setattr("sys.argv", ["approval", "--db", str(path), "propose",
+                                    "--request", "Add a recovery note"])
+    with pytest.raises(SystemExit) as exc:
+        main()
+    assert exc.value.code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "model provider request failed" in captured.err
+    assert "private provider response" not in captured.err
+    assert "Traceback" not in captured.err
+    with sqlite3.connect(path) as db:
+        for table in ("jobs", "audit", "incident_actions"):
+            assert db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0
+
+
 @pytest.mark.parametrize("command", ["propose", "decide"])
 def test_database_operation_errors_are_usage_errors(tmp_path, monkeypatch, capsys, command):
     from approval_workflow.workflow import Action, Workflow
