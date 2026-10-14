@@ -52,6 +52,8 @@ def main() -> None:
             action = plan_live(args.request) if args.request else action
             review = review_live(action) if args.request else None
             print(workflow.propose(action, review=review))
+        except sqlite3.DatabaseError as exc:
+            parser.error(f"database operation failed for {args.db}: {exc}")
         except ValueError as exc:
             parser.error(str(exc))
     else:
@@ -60,6 +62,8 @@ def main() -> None:
                 print(workflow.decide(args.job_id, args.approve, args.actor))
             else:
                 print(json.dumps(workflow.get(args.job_id), indent=2))
+        except sqlite3.DatabaseError as exc:
+            parser.error(f"database operation failed for {args.db}: {exc}")
         except KeyError:
             parser.error(f"job not found: {args.job_id}")
         except ValueError as exc:

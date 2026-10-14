@@ -36,6 +36,7 @@ Substitute the printed job ID. For a live model proposal, use `propose --request
 Use either a nonblank `--request` or all three manual fields (`--kind`, `--incident-id`, and `--reason`). Mixed modes and missing fields are rejected before creating a database or calling the model.
 
 Database initialization failures produce CLI usage errors with the database path and exit status 2, before any model calls.
+Database failures while proposing, deciding, or showing a job also produce usage errors with the database path and exit status 2. Failed proposal or decision writes roll back without printing a success result.
 
 ## Trade-offs, limitations, and next production steps
 

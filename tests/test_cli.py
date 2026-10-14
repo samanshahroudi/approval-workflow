@@ -1,6 +1,37 @@
+import sqlite3
+
 import pytest
 
 from approval_workflow.cli import main
+
+
+@pytest.mark.parametrize("command", ["propose", "decide"])
+def test_database_operation_errors_are_usage_errors(tmp_path, monkeypatch, capsys, command):
+    from approval_workflow.workflow import Action, Workflow
+
+    path = tmp_path / "approval.db"
+    workflow = Workflow(str(path))
+    action = Action(kind="add_note", incident_id=7, reason="Recovery confirmed")
+    job_id = workflow.propose(action)
+    with sqlite3.connect(path) as db:
+        before = {table: db.execute(f"SELECT * FROM {table}").fetchall()
+                  for table in ("jobs", "audit", "incident_actions")}
+        db.execute("CREATE TRIGGER fail_audit BEFORE INSERT ON audit "
+                   "BEGIN SELECT RAISE(ABORT, 'audit storage unavailable'); END")
+    flags = (["--kind", action.kind, "--incident-id", "7", "--reason", action.reason]
+             if command == "propose" else [job_id, "--approve", "--actor", "reviewer"])
+    monkeypatch.setattr("sys.argv", ["approval", "--db", str(path), command, *flags])
+    with pytest.raises(SystemExit) as exc:
+        main()
+    assert exc.value.code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert f"database operation failed for {path}" in captured.err
+    assert "audit storage unavailable" in captured.err
+    assert "Traceback" not in captured.err
+    with sqlite3.connect(path) as db:
+        for table, rows in before.items():
+            assert db.execute(f"SELECT * FROM {table}").fetchall() == rows
 
 
 @pytest.mark.parametrize("problem", ["directory", "parent_file", "invalid_database"])
