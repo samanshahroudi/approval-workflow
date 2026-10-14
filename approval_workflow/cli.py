@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import sqlite3
 
 from pydantic import ValidationError
 
@@ -42,7 +43,10 @@ def main() -> None:
                 parser.error(str(exc))
     if args.command == "decide" and not args.actor.strip():
         parser.error("--actor cannot be blank")
-    workflow = Workflow(args.db)
+    try:
+        workflow = Workflow(args.db)
+    except (OSError, sqlite3.DatabaseError) as exc:
+        parser.error(f"cannot open database {args.db}: {exc}")
     if args.command == "propose":
         try:
             action = plan_live(args.request) if args.request else action

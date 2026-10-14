@@ -3,6 +3,31 @@ import pytest
 from approval_workflow.cli import main
 
 
+@pytest.mark.parametrize("problem", ["directory", "parent_file", "invalid_database"])
+def test_database_initialization_errors_prevent_model_calls(
+    tmp_path, monkeypatch, capsys, problem,
+):
+    path = tmp_path / "approval.db"
+    if problem == "directory":
+        path.mkdir()
+    elif problem == "parent_file":
+        path.write_text("not a directory")
+        path = path / "approval.db"
+    else:
+        path.write_text("not a SQLite database")
+    monkeypatch.setattr("approval_workflow.cli.plan_live",
+                        lambda request: pytest.fail("unavailable database must not call the model"))
+    monkeypatch.setattr("sys.argv", ["approval", "--db", str(path), "propose",
+                                    "--request", "Add a recovery note"])
+    with pytest.raises(SystemExit) as exc:
+        main()
+    assert exc.value.code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert f"cannot open database {path}" in captured.err
+    assert "Traceback" not in captured.err
+
+
 @pytest.mark.parametrize("incident_id,reason", [("0", "Recovery confirmed"),
                                                ("-1", "Recovery confirmed"),
                                                (str(2**63), "Recovery confirmed"),
