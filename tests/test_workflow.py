@@ -152,29 +152,30 @@ def test_rejected_risk_review_leaves_no_durable_proposal(tmp_path):
             assert db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0
 
 
-def test_failed_decision_audit_rolls_back_and_can_be_retried(tmp_path):
+@pytest.mark.parametrize("approve,status", [(True, "completed"), (False, "rejected")])
+def test_failed_decision_audit_rolls_back_and_can_be_retried(tmp_path, approve, status):
     service = Workflow(str(tmp_path / "approval.db"))
     action = Action(kind="add_note", incident_id=7, reason="Recovery confirmed")
     job = service.propose(action)
     before = service.get(job)
     with sqlite3.connect(service.path) as db:
         db.execute("CREATE TRIGGER fail_decision_audit BEFORE INSERT ON audit "
-                   "WHEN NEW.event='completed' "
+                   f"WHEN NEW.event='{status}' "
                    "BEGIN SELECT RAISE(ABORT, 'audit unavailable'); END")
     with pytest.raises(sqlite3.IntegrityError, match="audit unavailable"):
-        service.decide(job, True, "reviewer")
+        service.decide(job, approve, "reviewer")
     assert service.get(job) == before
     with sqlite3.connect(service.path) as db:
         assert db.execute("SELECT COUNT(*) FROM incident_actions").fetchone()[0] == 0
         assert db.execute("SELECT event,actor FROM audit").fetchall() == [("proposed", "planner")]
         db.execute("DROP TRIGGER fail_decision_audit")
-    service.decide(job, True, "reviewer")
-    assert service.get(job)["status"] == "completed"
+    service.decide(job, approve, "reviewer")
+    assert service.get(job)["status"] == status
     with sqlite3.connect(service.path) as db:
-        assert db.execute("SELECT job_id,incident_id,kind,reason FROM incident_actions").fetchall() == [
-            (job, action.incident_id, action.kind, action.reason)]
+        assert db.execute("SELECT job_id,incident_id,kind,reason FROM incident_actions").fetchall() == (
+            [(job, action.incident_id, action.kind, action.reason)] if approve else [])
         assert db.execute("SELECT event,actor FROM audit").fetchall() == [
-            ("proposed", "planner"), ("completed", "reviewer")]
+            ("proposed", "planner"), (status, "reviewer")]
 
 
 @pytest.mark.parametrize("decision", ["false", "true", 0, 1, None, [], {}])
