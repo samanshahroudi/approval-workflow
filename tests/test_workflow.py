@@ -272,3 +272,30 @@ def test_maximum_sqlite_incident_id_can_be_approved(tmp_path):
     assert service.get(job)["status"] == "completed"
     with sqlite3.connect(service.path) as db:
         assert db.execute("SELECT incident_id FROM incident_actions").fetchone() == (2**63 - 1,)
+
+
+def test_failed_action_write_preserves_pending_job_and_allows_retry(tmp_path):
+    service = Workflow(str(tmp_path / "approval.db"))
+    action = Action(kind="add_note", incident_id=7, reason="Recovery confirmed")
+    job = service.propose(action)
+    before = service.get(job)
+    with sqlite3.connect(service.path) as db:
+        db.execute("CREATE TRIGGER fail_action BEFORE INSERT ON incident_actions "
+                   "BEGIN SELECT RAISE(ABORT, 'action store unavailable'); END")
+    with pytest.raises(sqlite3.IntegrityError, match="action store unavailable"):
+        service.decide(job, True, "reviewer")
+    assert service.get(job) == before
+    with sqlite3.connect(service.path) as db:
+        assert db.execute("SELECT COUNT(*) FROM incident_actions").fetchone()[0] == 0
+        assert db.execute("SELECT event,actor FROM audit ORDER BY rowid").fetchall() == [
+            ("proposed", "planner")]
+        db.execute("DROP TRIGGER fail_action")
+    result = service.decide(job, True, "reviewer")
+    assert service.get(job) == {
+        "id": job, "action": action.model_dump(), "status": "completed", "result": result,
+    }
+    with sqlite3.connect(service.path) as db:
+        assert db.execute("SELECT job_id,incident_id,kind,reason FROM incident_actions").fetchall() == [
+            (job, action.incident_id, action.kind, action.reason)]
+        assert db.execute("SELECT event,actor FROM audit ORDER BY rowid").fetchall() == [
+            ("proposed", "planner"), ("completed", "reviewer")]
