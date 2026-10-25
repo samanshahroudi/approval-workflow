@@ -28,6 +28,8 @@ class Action(BaseModel):
 
 
 class RiskReview(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     safe_to_propose: bool = Field(strict=True)
     rationale: str = Field(min_length=5, max_length=300)
 

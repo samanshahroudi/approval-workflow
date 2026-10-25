@@ -7,6 +7,23 @@ import pytest
 from approval_workflow.workflow import Action, RiskReview, Workflow
 
 
+def test_unknown_risk_review_fields_cannot_create_proposal(tmp_path):
+    from types import SimpleNamespace
+
+    review_data = {"safe_to_propose": True, "rationale": "Recovery confirmed",
+                   "requires_changes": True}
+    with pytest.raises(ValueError, match="Extra inputs are not permitted"):
+        RiskReview.model_validate(review_data)
+    service = Workflow(str(tmp_path / "approval.db"))
+    action = Action(kind="add_note", incident_id=7, reason="Recovery confirmed")
+    review = SimpleNamespace(model_dump=lambda: review_data)
+    with pytest.raises(ValueError, match="Extra inputs are not permitted"):
+        service.propose(action, review=review)
+    with sqlite3.connect(service.path) as db:
+        assert db.execute("SELECT COUNT(*) FROM jobs").fetchone()[0] == 0
+        assert db.execute("SELECT COUNT(*) FROM audit").fetchone()[0] == 0
+
+
 def test_unknown_action_fields_are_rejected():
     with pytest.raises(ValueError, match="Extra inputs are not permitted"):
         Action(kind="add_note", incident_id=7, reason="Recovery confirmed", close_incident=True)
