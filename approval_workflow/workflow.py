@@ -9,10 +9,12 @@ from pathlib import Path
 from typing import Literal, TypedDict
 
 from langgraph.graph import END, START, StateGraph
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class Action(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     kind: Literal["add_note", "close_incident"]
     incident_id: int = Field(gt=0, le=2**63 - 1, strict=True)
     reason: str = Field(min_length=5, max_length=500)
